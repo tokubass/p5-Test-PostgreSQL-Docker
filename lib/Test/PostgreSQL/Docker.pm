@@ -5,7 +5,6 @@ use warnings;
 use DBI;
 use DBD::Pg;
 use Sub::Retry qw/retry/;
-use Net::EmptyPort qw/empty_port/;
 use IPC::Run ();
 
 our $VERSION = "0.03003";
@@ -17,7 +16,7 @@ sub new {
         docker  => undef,
         pgname  => "postgres",
         tag     => 'latest',
-        port    => empty_port(),
+        port    => 5432,
         host    => "127.0.0.1",
         dbowner => "postgres",
         password=> "postgres",
@@ -78,10 +77,10 @@ sub run {
     my $host = $self->{host};
     my $user = $self->{dbowner};
     my $pass = $self->{password};
-    my $port = $self->{port};
     my $dbname = $self->{dbname};
-    my @envs   = map { ('-e', $_) } "POSTGRES_USER=$user", "POSTGRES_PASSWORD=$pass", "POSTGRES_DB=$dbname";
-    my ( $out, $err ) = $self->docker_cmd(run => ['--rm', '--name', $ctname, '-p', "$host:$port:5432", @envs, '-d', "$image"]);
+    my @envs   = map { ('-e', $_) } "POSTGRES_USER=$user", "POSTGRES_PASSWORD=$pass", "POSTGRES_DB=$dbname", "POSTGRES_HOST=$host";
+    my $run_cmd = ['--rm', '--name', $ctname, '--net', $self->{docker_network}, @envs, '-d', "$image"];
+    my ( $out, $err ) = $self->docker_cmd(run => $run_cmd);
 
     if ( !$err or $err =~ /Status: Downloaded newer image for/) { # for auto pulling
         $self->{docker_is_running} = 1;
@@ -405,4 +404,3 @@ L<Test::PostgreSQL>
 L<https://hub.docker.com/_/postgres>
 
 =cut
-
