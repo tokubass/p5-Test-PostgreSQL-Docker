@@ -16,8 +16,8 @@ sub new {
         docker  => undef,
         pgname  => "postgres",
         tag     => 'latest',
+        host    => '',
         port    => 5432,
-        host    => "127.0.0.1",
         dbowner => "postgres",
         password=> "postgres",
         dbname  => "test",
@@ -75,7 +75,7 @@ sub run {
     my $ctname = $self->container_name();
     my $class  = ref($self);
 
-    my $host = $self->{host};
+    my $host = $self->container_name() . "." . $self->{docker_network};
     my $user = $self->{dbowner};
     my $pass = $self->{password};
     my $dbname = $self->{dbname};
@@ -140,7 +140,7 @@ sub psql_args {
         $self->{psql_args} = $_[0];
     }
     $self->{psql_args}
-        ||= ['-h', $self->{host}, '-p', 5432, '-U', $self->{dbowner}, '-d',  $self->{dbname}];
+        ||= ['-h', $self->host, '-p', 5432, '-U', $self->{dbowner}, '-d',  $self->{dbname}];
 }
 
 sub run_psql {
@@ -164,7 +164,7 @@ sub run_psql_scripts {
 sub dsn {
     my ($self, %args) = @_;
     $args{port}     ||= $self->{port};
-    $args{host}     ||= $self->{host};
+    $args{host}     ||= $self->host;
     $args{user}     ||= $self->{dbowner};
     $args{dbname}   ||= $self->{dbname};
     $args{password} ||= $self->{password};
@@ -184,6 +184,15 @@ sub dbh {
 
 sub port {
     shift->{port};
+}
+
+sub host {
+    my $self = shift;
+    unless ($self->{host}) {
+        $self->{host} = $self->container_name() . "." . $self->{docker_network};
+    }
+
+    return $self->{host}
 }
 
 sub container_name {
