@@ -5,7 +5,6 @@ use warnings;
 use DBI;
 use DBD::Pg;
 use Sub::Retry qw/retry/;
-use Net::EmptyPort qw/empty_port/;
 use IPC::Run ();
 
 our $VERSION = "0.03003";
@@ -17,12 +16,13 @@ sub new {
         docker  => undef,
         pgname  => "postgres",
         tag     => 'latest',
-        port    => empty_port(),
-        host    => "127.0.0.1",
+        host    => '',
+        port    => 5432,
         dbowner => "postgres",
         password=> "postgres",
         dbname  => "test",
         print_docker_error => 1,
+        docker_network => 'bridge',
         _orig_address => '',
         _pid => $$,
         %opts,
@@ -75,13 +75,13 @@ sub run {
     my $ctname = $self->container_name();
     my $class  = ref($self);
 
-    my $host = $self->{host};
+    my $host = $self->container_name() . "." . $self->{docker_network};
     my $user = $self->{dbowner};
     my $pass = $self->{password};
-    my $port = $self->{port};
     my $dbname = $self->{dbname};
-    my @envs   = map { ('-e', $_) } "POSTGRES_USER=$user", "POSTGRES_PASSWORD=$pass", "POSTGRES_DB=$dbname";
-    my ( $out, $err ) = $self->docker_cmd(run => ['--rm', '--name', $ctname, '-p', "$host:$port:5432", @envs, '-d', "$image"]);
+    my @envs   = map { ('-e', $_) } "POSTGRES_USER=$user", "POSTGRES_PASSWORD=$pass", "POSTGRES_DB=$dbname", "POSTGRES_HOST=$host";
+    my $run_cmd = ['--rm', '--name', $ctname, '--net', $self->{docker_network}, @envs, '-d', "$image"];
+    my ( $out, $err ) = $self->docker_cmd(run => $run_cmd);
 
     if ( !$err or $err =~ /Status: Downloaded newer image for/) { # for auto pulling
         $self->{docker_is_running} = 1;
@@ -140,7 +140,7 @@ sub psql_args {
         $self->{psql_args} = $_[0];
     }
     $self->{psql_args}
-        ||= ['-h', $self->{host}, '-p', 5432, '-U', $self->{dbowner}, '-d',  $self->{dbname}];
+        ||= ['-h', $self->host, '-p', 5432, '-U', $self->{dbowner}, '-d',  $self->{dbname}];
 }
 
 sub run_psql {
@@ -164,7 +164,7 @@ sub run_psql_scripts {
 sub dsn {
     my ($self, %args) = @_;
     $args{port}     ||= $self->{port};
-    $args{host}     ||= $self->{host};
+    $args{host}     ||= $self->host;
     $args{user}     ||= $self->{dbowner};
     $args{dbname}   ||= $self->{dbname};
     $args{password} ||= $self->{password};
@@ -184,6 +184,15 @@ sub dbh {
 
 sub port {
     shift->{port};
+}
+
+sub host {
+    my $self = shift;
+    unless ($self->{host}) {
+        $self->{host} = $self->container_name() . "." . $self->{docker_network};
+    }
+
+    return $self->{host}
 }
 
 sub container_name {
@@ -405,4 +414,3 @@ L<Test::PostgreSQL>
 L<https://hub.docker.com/_/postgres>
 
 =cut
-
