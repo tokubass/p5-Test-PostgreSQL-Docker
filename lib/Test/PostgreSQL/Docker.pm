@@ -22,6 +22,7 @@ sub new {
         password=> "postgres",
         dbname  => "test",
         print_docker_error => 1,
+        docker_network => 'bridge',
         _orig_address => '',
         _pid => $$,
         %opts,
